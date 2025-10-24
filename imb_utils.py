@@ -349,7 +349,7 @@ def plot_1_over_t_decay(runs, H, cfg, group="min", t_min=5e5, cmap_name="viridis
     """
     Plots 1 - p_y for all eps, focusing on the tail (t >= t_min).
     Colors encode epsilon;
-    Adds the theory ~ 1 / [4 * (...) * h * t] line on the same tail region.
+    Adds the theory ~ log t / [epsilon * t^2] line on the same tail region.
     """
     plt.figure(figsize=(7.2, 4.8))
 
@@ -380,17 +380,19 @@ def plot_1_over_t_decay(runs, H, cfg, group="min", t_min=5e5, cmap_name="viridis
     if np.any(t_mask):
         t_th = t_ref[t_mask]
         if group == "min":
-            theory = 1.0 / (4.0 * eps_ref * H * t_th)
-            label = rf"Theory $\sim \frac{{1}}{{4\,\varepsilon\,h\,t}}$ ($\varepsilon={eps_ref:g}$)"
+            kappa=1.7
+            theory = kappa / (eps_ref * t_th * H)
+            label = rf"Theory $\sim \frac{{\kappa}}{{\varepsilon\,t\,h}} \qquad (\varepsilon={eps_ref:g})$"
         else:
-            theory = 1.0 / (4.0 * (1.0 - eps_ref) * H * t_th)
-            label = rf"Theory $\sim \frac{{1}}{{4(1-\varepsilon)\,h\,t}}$ ($\varepsilon={eps_ref:g}$)"
+            kappa=1.7
+            theory = kappa / ((1.0 - eps_ref) * t_th * H)
+            label = rf"Theory $\sim \frac{{\kappa}}{{(1-\varepsilon)\,t\,h}} \qquad (\varepsilon={eps_ref:g})$"
         plt.semilogy(t_th, theory, "k--", lw=2.0, label=label)
 
     # axes/labels
     plt.xlabel("t (steps)")
-    plt.ylabel(f"1 - p_y ({'minority' if group=='min' else 'majority'})")
-    plt.title(f"Decay of 1 - p_y ({group}) across $\\varepsilon$")
+    plt.ylabel(f"$\\mathbb{{E}}_{{{group}}}[1 - p_y]$")
+    plt.title(f"Decay of $\\mathbb{{E}}_{{{group}}}[1 - p_y]$ across $\\varepsilon \\qquad (\\kappa_{{{group}}}={kappa:g})$")
     # colorbar for epsilon
     sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])  # fixes ValueError
@@ -420,8 +422,8 @@ def plot_speed_vs_epsilon_at_last(runs, H, cfg):
         om_min = R["one_minus_pmin"][idx]
         om_maj = R["one_minus_pmaj"][idx]
         eps_arr.append(eps)
-        qmin.append( (om_min) * (4.0 * H * t[idx]) )
-        qmaj.append( (om_maj) * (4.0 * H * t[idx]) )
+        qmin.append( (om_min) * (H * t[idx]) )
+        qmaj.append( (om_maj) * (H * t[idx]) )
 
     eps_arr = np.array(eps_arr)
     qmin = np.array(qmin)
@@ -429,23 +431,25 @@ def plot_speed_vs_epsilon_at_last(runs, H, cfg):
 
     # Theory curves: 1/ε and 1/(1-ε)
     egrid = np.linspace(max(1e-3, eps_arr.min()), min(0.999, eps_arr.max()), 400)
-    theory_min = 2.4 / egrid
-    theory_maj = 6.2 / (1.0 - egrid)
+    kappa_min = 1.7
+    kappa_maj = 1.7
+    theory_min = kappa_min / egrid
+    theory_maj = kappa_maj / (1.0 - egrid)
 
     plt.figure(figsize=(7,5))
     plt.scatter(eps_arr, qmin, s=25, label="Empirical (minority)")
-    plt.plot(egrid, theory_min, "k--", lw=2, label=r"Theory $\propto \frac{1}{\varepsilon}$")
-    plt.xlabel(r"$\varepsilon$"); plt.ylabel(r"$(1 - p_{min}) \cdot (4 h T^*)$")
-    plt.title(r"Minority speed scaling vs $\varepsilon$")
+    plt.plot(egrid, theory_min, "k--", lw=2, label=r"Theory $\sim \frac{\kappa_{min}}{\varepsilon}$")
+    plt.xlabel(r"$\varepsilon$"); plt.ylabel(r"$(1 - p_{min}) \cdot (h\, T^*)$")
+    plt.title(rf"Minority speed scaling vs $\varepsilon \qquad (\kappa_{{min}}={kappa_min:g})$")
     plt.legend(); plt.tight_layout()
     plt.savefig(os.path.join(cfg.out_dir, "Minority_speed_scaling_vs_eps"), dpi=180)
     plt.show()
 
     plt.figure(figsize=(7,5))
     plt.scatter(eps_arr, qmaj, s=25, label="Empirical (majority)")
-    plt.plot(egrid, theory_maj, "k--", lw=2, label=r"Theory $\propto \frac{1}{1-\varepsilon}$")
-    plt.xlabel(r"$\varepsilon$"); plt.ylabel(r"$(1 - p_{maj}) \cdot (4 h T^*)$")
-    plt.title(r"Majority speed scaling vs $\varepsilon$")
+    plt.plot(egrid, theory_maj, "k--", lw=2, label=r"Theory $\sim \frac{\kappa_{maj}}{1-\varepsilon}$")
+    plt.xlabel(r"$\varepsilon$"); plt.ylabel(r"$(1 - p_{maj}) \cdot (h\, T^*)$")
+    plt.title(rf"Majority speed scaling vs $\varepsilon \qquad (\kappa_{{maj}}={kappa_maj:g})$")
     plt.legend(); plt.tight_layout()
     plt.savefig(os.path.join(cfg.out_dir, "Majority_speed_scaling_vs_eps"), dpi=180)
     plt.show()
@@ -455,14 +459,14 @@ def plot_balanced_loss_over_time(runs, H, cfg, n_eps_to_show=10, t_min=None, t_m
     Balanced loss vs time across epsilons.
       - Shows at most n_eps_to_show curves evenly sampled across epsilons.
       - Optionally trims to [t_min, t_max].
-      - Single theory reference (∝ 1/t) with median epsilon.
+      - Single theory reference ( 1/t) with median epsilon.
     """
     all_eps = np.array(sorted(runs.keys()))
     # pick ε evenly across the available runs
     if n_eps_to_show >= len(all_eps):
         sel_eps = all_eps
     else:
-        idx = np.linspace(0, len(all_eps)-1, n_eps_to_show).round().astype(int)
+        idx = np.linspace(15, len(all_eps)-1, n_eps_to_show).round().astype(int)
         sel_eps = all_eps[idx]
 
     # color mapping for ε
@@ -493,8 +497,11 @@ def plot_balanced_loss_over_time(runs, H, cfg, n_eps_to_show=10, t_min=None, t_m
         t_ref = t_ref[t_ref >= t_min]
     if t_max is not None:
         t_ref = t_ref[t_ref <= t_max]
-    theory = 1.0 / (8.0 * eps_ref * (1.0 - eps_ref) * H * t_ref)
-    plt.plot(t_ref, theory, "k--", lw=2.0, label=rf"Theory $\propto\frac{{1}}{{t}}$")
+
+    kappa_min=1.7
+    kappa_maj=1.7
+    theory = 1.0 / (2.0 * H * t_ref) * (kappa_min/eps_ref + kappa_maj/(1.0 - eps_ref)) 
+    plt.plot(t_ref, theory, "k--", lw=2.0, label=rf"Theory $\sim \frac{{1}}{{2\,t\,h}}\,\left(\frac{{\kappa_{{maj}}}}{{1-\varepsilon}}+\frac{{\kappa_{{min}}}}{{\varepsilon}}\right)\qquad (\varepsilon={eps_ref:g})$")
 
     plt.xlabel("t (steps)")
     plt.ylabel("Balanced CE loss")
@@ -536,13 +543,16 @@ def plot_balanced_loss_normalized_at_last(runs, H, cfg):
 
     # Build the theoretical curve 1 / [eps * (1 - eps)]
     egrid = np.linspace(max(1e-3, eps_arr.min()), min(0.999, eps_arr.max()), 400)
-    theory = 1.0 / (egrid * (1.0 - egrid))
-    theory /= theory.max()  # optional: normalize so both fit in scale
-    L_last_scaled = L_last / L_last.max()
+    kappa_min=1.7
+    kappa_maj=1.7
+    theory = 1.0 / (2.0 * H * t_star) * (kappa_min/egrid + kappa_maj/(1.0 - egrid))
+    #theory /= theory.max()  # optional: normalize so both fit in scale
+    L_last_scaled = L_last
+    #L_last_scaled = L_last / L_last.max()
 
     plt.figure(figsize=(7,5))
     plt.scatter(eps_arr, L_last_scaled, s=35, label="Empirical (scaled)")
-    plt.plot(egrid, theory, "k--", lw=2, label=r"Theory $\propto \frac{1}{\varepsilon(1-\varepsilon)}$")
+    plt.plot(egrid, theory, "k--", lw=2, label=rf"Theory $\sim \frac{{1}}{{2\,T^*\,h}}\,\left(\frac{{\kappa_{{maj}}}}{{1-\varepsilon}}+\frac{{\kappa_{{min}}}}{{\varepsilon}}\right)\qquad (T^*={t_star:g})$")
     plt.xlabel(r"$\varepsilon$")
     plt.ylabel(r"Balanced CE loss (scaled)")
     plt.title(r"Balanced loss across $\varepsilon$ at large $T^*$")
