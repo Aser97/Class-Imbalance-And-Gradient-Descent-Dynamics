@@ -1,1 +1,1 @@
-# Class-Imbalance-on-Gradient-Descent-Dynamics
+# Spurious-Correlation-And-Gradient-Descent-Dynamics
